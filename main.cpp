@@ -39,34 +39,33 @@ struct printer {
   }
 };
 
-void print_entries(const directory_iterator& iter, int cursorline) {
+void print_files(const path& cwd, unsigned int cursorline) {
+  printer p;
+  directory_iterator iter(cwd);
   vector<directory_entry> entries;
   std::copy(begin(iter), end(iter), back_inserter(entries));
-  
-  p << cwd << "\n";
+
+  if (cursorline == 0) attron(A_BOLD);
+  p << cwd.string() << "\n";
+  attroff(A_BOLD);
   
   for (unsigned int i = 0; i < entries.size(); ++i) {
     const auto& v = entries[i];
     if (i + 1 == entries.size())
       break;
-    printer() << "├── ";
-    if (cursorline)
-    attron(A_BOLD);
-    printer() << v.path().filename();
+    p << "├── ";
+    if (cursorline - 1 == i)
+      attron(A_BOLD);
+    p << v.path().filename().string();
     attroff(A_BOLD);
-    printer() << "\n";
+    p << "\n";
   }
-  printer() << "└── " << entries[entries.size() - 1].path().filename() << "\n";
-}
-
-void highlight(int cursorline) {
-  if (cursorline == 0) move(cursorline, 0);
-  else                 move(cursorline, 3);
-  char str[100];
-  innstr(str, 100);
-  move(15, 0);
-  printer() << cursorline << ": ";
-  printer() << str << "\n";
+  p << "└── ";
+  if (cursorline == entries.size())
+    attron(A_BOLD);
+  p << entries[entries.size() - 1].path().filename().string();
+  attroff(A_BOLD);
+  p << "\n";
 }
 
 int main(int argc, char** argv) {
@@ -76,19 +75,20 @@ int main(int argc, char** argv) {
   keypad(stdscr, TRUE);
   raw();
   bool done = false;
-  int cursorline = 0;
-  printer p;
+  unsigned int cursorline = 0;
+  printer p;  
+  path cwd(current_path()); // current working directory
   
   while (!done) {
+    clear();
     move(0, 0);
-    path cwd(current_path());
 
     try {
       if (exists(cwd)) {
         if (is_regular_file(cwd)) { 
           p << cwd << " size is " << file_size(cwd) << '\n';
         } else if (is_directory(cwd)) {
-          print_explorer(directory_iterator(cwd), cursorline);
+          print_files(cwd, cursorline);
         } else {
           p << cwd << " exists, but is not a regular file or directory\n";
         }
@@ -99,25 +99,31 @@ int main(int argc, char** argv) {
       addstr(ex.what() + '\n');
     }
     
-    
     int c = getch();
+
+    move(15, 0);
     p << "input code: " << c << "\n";
 
     switch(c) {
     case 113: //q
       done = true;
       break;
-    case 259:
+    case 259: // arrow up
       p << "UP\n";
       if (cursorline != 0) --cursorline;
       break;
-    case 258:
+    case 258: // arrow down
       p << "DOWN\n";
       ++cursorline;
       break;
+    case 260: // arrow left
+      cwd = cwd.parent_path();
+      p << cwd.string() << "\n";
+      break;
+    case 261: // arrow right
+      path child = 
+      break;
     }
-
-    highlight(cursorline);
 
     refresh();
   }
