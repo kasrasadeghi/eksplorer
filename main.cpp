@@ -1,4 +1,5 @@
 #include <ncurses.h>
+#include <unistd.h>
 #include <experimental/filesystem>
 #include <iostream>
 #include <sstream>
@@ -13,15 +14,17 @@ using std::end;
 using std::vector;
 using std::ostream;
 using std::string;
+using std::size_t;
 using namespace std::experimental::filesystem::v1;
 
 struct printer {
-  // ostream& operator <<(ostream& out) {
+  // printer& operator <<(const basic_ostream& out) {
     // std::stringstream ss;
     // ss << out.rdbuf();
     // addstr(ss.str().c_str());
-    // return out;
+    // return *this;
   // }
+  
   template <typename T>
   printer& operator<<(const T& anything) {
     std::stringstream ss;
@@ -39,34 +42,65 @@ struct printer {
   }
 };
 
-void print_files(const path& cwd, unsigned int cursorline) {
-  printer p;
-  directory_iterator iter(cwd);
-  vector<directory_entry> entries;
-  std::copy(begin(iter), end(iter), back_inserter(entries));
+class User {
+  vector<directory_entry> _entries;
+  unsigned int _cursorline;
 
-  if (cursorline == 0) attron(A_BOLD);
-  p << cwd.string() << "\n";
-  attroff(A_BOLD);
+  void _reset_entries() {
+    _entries.clear();
+    directory_iterator iter(current_path());
+    std::copy(begin(iter), end(iter), back_inserter(_entries));
+  }
+public:
+  User(): _entries(), _cursorline() {
+    _reset_entries();
+  }
   
-  for (unsigned int i = 0; i < entries.size(); ++i) {
-    const auto& v = entries[i];
-    if (i + 1 == entries.size())
-      break;
-    p << "├── ";
-    if (cursorline - 1 == i)
+  void display() {
+    printer p;
+    
+    if (_cursorline == 0) attron(A_BOLD);
+    p << current_path().string() << "\n";
+    attroff(A_BOLD);
+
+    size_t size = _entries.size();
+    
+    for (unsigned int i = 0; i < size; ++i) {
+      const auto& v = _entries[i];
+      if (i + 1 == size)
+        break;
+      p << "├── ";
+      if (_cursorline - 1 == i)
+        attron(A_BOLD);
+      p << v.path().filename().string();
+      attroff(A_BOLD);
+      p << "\n";
+    }
+    p << "└── ";
+    if (_cursorline == size)
       attron(A_BOLD);
-    p << v.path().filename().string();
+    p << _entries[size - 1].path().filename().string();
     attroff(A_BOLD);
     p << "\n";
   }
-  p << "└── ";
-  if (cursorline == entries.size())
-    attron(A_BOLD);
-  p << entries[entries.size() - 1].path().filename().string();
-  attroff(A_BOLD);
-  p << "\n";
-}
+
+  void folder_up() {
+    chdir("..");
+    _reset_entries();
+  }
+
+  void folder_down() {
+    chdir("")
+  }
+
+  void cursor_up() {
+    if (_cursorline != 0) --_cursorline;
+  }
+
+  void cursor_down() {
+    if (_cursorline != _entries.size()) ++_cursorline;
+  }
+};
 
 int main(int argc, char** argv) {
   setlocale(LC_ALL,"");
@@ -75,26 +109,15 @@ int main(int argc, char** argv) {
   keypad(stdscr, TRUE);
   raw();
   bool done = false;
-  unsigned int cursorline = 0;
   printer p;  
-  path cwd(current_path()); // current working directory
+  User user;
   
   while (!done) {
     clear();
     move(0, 0);
 
     try {
-      if (exists(cwd)) {
-        if (is_regular_file(cwd)) { 
-          p << cwd << " size is " << file_size(cwd) << '\n';
-        } else if (is_directory(cwd)) {
-          print_files(cwd, cursorline);
-        } else {
-          p << cwd << " exists, but is not a regular file or directory\n";
-        }
-      } else {
-        p << cwd << " does not exist\n";
-      }
+      user.display();
     } catch (const filesystem_error& ex) {
       addstr(ex.what() + '\n');
     }
@@ -110,18 +133,17 @@ int main(int argc, char** argv) {
       break;
     case 259: // arrow up
       p << "UP\n";
-      if (cursorline != 0) --cursorline;
+      user.cursor_up();
       break;
     case 258: // arrow down
       p << "DOWN\n";
-      ++cursorline;
+      user.cursor_down();
       break;
     case 260: // arrow left
-      cwd = cwd.parent_path();
-      p << cwd.string() << "\n";
+      user.folder_up();
       break;
     case 261: // arrow right
-      path child = 
+      // path child = 
       break;
     }
 
