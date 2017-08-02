@@ -50,7 +50,13 @@ class User {
     _entries.clear();
     directory_iterator iter(current_path());
     std::copy(begin(iter), end(iter), back_inserter(_entries));
+    _reset_cursorline();
   }
+
+  void _reset_cursorline() {
+    _cursorline = 0;
+  }
+  
 public:
   User(): _entries(), _cursorline() {
     _reset_entries();
@@ -73,6 +79,7 @@ public:
       if (_cursorline - 1 == i)
         attron(A_BOLD);
       p << v.path().filename().string();
+      if (is_directory(v)) p << "/";
       attroff(A_BOLD);
       p << "\n";
     }
@@ -87,10 +94,12 @@ public:
   void folder_up() {
     chdir("..");
     _reset_entries();
+    
   }
 
   void folder_down() {
-    chdir("")
+    chdir(current().c_str());
+    _reset_entries();
   }
 
   void cursor_up() {
@@ -99,6 +108,11 @@ public:
 
   void cursor_down() {
     if (_cursorline != _entries.size()) ++_cursorline;
+  }
+
+  string current() {
+    if (_cursorline == 0) return ".";
+    return _entries[_cursorline - 1].path().filename().string();
   }
 };
 
@@ -143,7 +157,7 @@ int main(int argc, char** argv) {
       user.folder_up();
       break;
     case 261: // arrow right
-      // path child = 
+      user.folder_down();
       break;
     }
 
